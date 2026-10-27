@@ -7,3 +7,6 @@ data/languages/*.sla
 /.settings
 /dist
 /.gradle
+lib/
+__pycache__/
+*.lock

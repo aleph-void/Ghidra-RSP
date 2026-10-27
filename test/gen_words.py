@@ -11,7 +11,7 @@ import sys
 
 def structured():
     rnd = random.Random(12345)
-    W = []
+    W = [0]
 
     def regs():
         return rnd.randrange(32), rnd.randrange(32), rnd.randrange(32)

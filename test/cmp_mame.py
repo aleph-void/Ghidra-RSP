@@ -84,11 +84,17 @@ for (hw, hl, ht), (mw, mt) in zip(gh, ma):
     mm, mo = m
     if gm in SCALAR and mm == gm:
         def lane_of(sx):
-            return int(sx, 16) if sx.startswith('0x') else int(sx)
+            if sx is None:
+                return None
+            try:
+                return int(sx, 16) if sx.startswith('0x') else int(sx)
+            except ValueError:
+                return None            # a broadcast notation such as 0q / 1h
         e = (w >> 21) & 15
         d_ok = (go[0][1] == mo[0][1] and lane_of(go[0][2]) == lane_of(mo[0][2]) and go[1][1] == mo[1][1])
         if d_ok and e >= 8:
-            if go[1][2] == str(e - 8) and lane_of(mo[1][2]) == e - 8:
+            # vt[e-8]; for VMOV Ghidra shows the broadcast notation [N] too
+            if lane_of(go[1][2]) == e - 8 and lane_of(mo[1][2]) == e - 8:
                 stats['exact'] += 1; continue
         elif d_ok:
             cls('explained: MAME prints another lane for the vt element when e < 8', item); continue

@@ -18,7 +18,8 @@ def fix(text):
     return text
 
 
-SCALAR = set('vrcp vrcpl vrcph vmov vrsq vrsql vrsqh'.split())
+SCALAR = set('vmov'.split())
+RCP_FAMILY = set('vrcp vrcpl vrcph vrsq vrsql vrsqh'.split())
 items = []
 inexpressible = collections.defaultdict(list)
 for i, (w, n, t) in enumerate(gh):
@@ -26,7 +27,7 @@ for i, (w, n, t) in enumerate(gh):
         continue
     mn = t.split()[0]
     if mn in SCALAR and not re.search(r'\[\d\]$', fix(t)):
-        # armips only has the vt[lane] form (e >= 8); it misreads [0h] etc. as a lane
+        # vmov with e < 8: armips only has the vt[lane] form (e >= 8); it misreads [0h] etc. as a lane
         inexpressible[mn].append((w, t))
         continue
     items.append((i, w, fix(t)))
@@ -96,7 +97,9 @@ def canon(mn, w):
     w &= ~IGN.get(mn, 0)
     if mn in ('cfc2', 'ctc2') and (w >> 11) & 3 == 3:
         w ^= 1 << 11
-    if mn in VEC_E and (w >> 21) & 15 == 1:
+    if mn in RCP_FAMILY:                   # the source lane is e & 7: armips always writes e = 8 + lane
+        w = (w & ~(15 << 21)) | ((8 | (w >> 21 & 7)) << 21)
+    elif mn in VEC_E and (w >> 21) & 15 == 1:
         w &= ~(1 << 21)
     return w
 
@@ -122,7 +125,7 @@ for i, w, t in items:
         diffs[mn].append((w, t, '%08x' % word))
 for k, v in stats.items():
     print(f'{k:20} {v}')
-print('not expressible in armips syntax (scalar-element ops with e < 8):', sum(len(v) for v in inexpressible.values()))
+print('not expressible in armips syntax (vmov with e < 8):', sum(len(v) for v in inexpressible.values()))
 print('--- armips rejects (by mnemonic)')
 for mn, v in sorted(rejected.items(), key=lambda kv: -len(kv[1])):
     print(f'{mn:10} {len(v):6}  e.g. {v[0][0]} {v[0][1]}')
