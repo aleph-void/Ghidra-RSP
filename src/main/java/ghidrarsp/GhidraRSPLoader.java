@@ -15,34 +15,41 @@
 */
 package ghidrarsp;
 
-import java.io.IOException;
-import java.util.*;
-import java.io.FileInputStream;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
-import docking.widgets.filechooser.GhidraFileChooser;
 import ghidra.app.util.Option;
 import ghidra.app.util.OptionUtils;
 import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.app.util.opinion.AbstractProgramWrapperLoader;
 import ghidra.app.util.opinion.LoadSpec;
+import ghidra.app.util.opinion.Loader;
 import ghidra.framework.model.DomainObject;
 import ghidra.program.flatapi.FlatProgramAPI;
 import ghidra.program.model.lang.LanguageCompilerSpecPair;
 import ghidra.program.model.listing.Program;
-import ghidra.program.model.util.CodeUnitInsertionException;
+import ghidra.program.model.mem.MemoryBlock;
 import ghidra.util.exception.CancelledException;
-import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.task.TaskMonitor;
-import ghidra.app.util.opinion.Loader;
 
 /**
-* TODO: Provide class-level documentation that describes what this loader does.
-*/
+ * Loads a Nintendo 64 RSP microcode image (the contents of IMEM) as the RSP language.
+ *
+ * IMEM is mapped at 0x1000 (boot microcode, which runs from the start of IMEM) or 0x1080 (main
+ * microcode, which the boot microcode DMAs to IMEM+0x80); DMEM, optionally loaded from a second file,
+ * is at 0x0000-0x0FFF. The OSTask structure the CPU leaves at DMEM 0xFC0 is applied as a data type.
+ */
 public class GhidraRSPLoader extends AbstractProgramWrapperLoader {
 
-    private static String OPTION_IS_BOOT = "Is Boot";
+    private static final String OPTION_IS_BOOT = "Is Boot";
+    private static final String OPTION_DMEM = "DMEM file (optional)";
+    private static final int DMEM_SIZE = 0x1000;
+    private static final int IMEM_BASE = 0x1000;
 
     @Override
     public String getName() {
@@ -53,83 +60,88 @@ public class GhidraRSPLoader extends AbstractProgramWrapperLoader {
     public Collection<LoadSpec> findSupportedLoadSpecs(ByteProvider provider) throws IOException {
         List<LoadSpec> loadSpecs = new ArrayList<>();
 
-        loadSpecs.add(new LoadSpec(this, 0, new LanguageCompilerSpecPair("RSP:BE:32:default", "default"), true));
+        // IMEM is 4 KB of 32-bit instructions. There is no signature to look for, so the loader is
+        // offered (not preferred) for any file of that shape: pick it explicitly.
+        long len = provider.length();
+        if (len > 0 && len <= DMEM_SIZE && len % 4 == 0) {
+            loadSpecs.add(new LoadSpec(this, 0, new LanguageCompilerSpecPair("RSP:BE:32:default", "default"), false));
+        }
 
         return loadSpecs;
     }
 
     @Override
-    protected void load(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
-    Program program, TaskMonitor monitor, MessageLog log)
-    throws CancelledException, IOException {
+    protected void load(Program program, ImporterSettings settings)
+            throws CancelledException, IOException {
 
+        ByteProvider provider = settings.provider();
+        List<Option> options = settings.options();
+        MessageLog log = settings.log();
         FlatProgramAPI api = new FlatProgramAPI(program);
-
-        int dmemEnd = 0;
-        while (true)
-        {
-            GhidraFileChooser chooser = new GhidraFileChooser(null);
-            chooser.setTitle("Choose a ucode rodata file (the content of DMEM)");
-            File f = chooser.getSelectedFile();
-            if (f == null)
-                break;
-
-            if (!f.exists() || f.isDirectory())
-                continue;
-
-            byte[] bytes = new byte[(int)f.length()];
-            dmemEnd = bytes.length;
-            var fileReader = new FileInputStream(f.getPath());
-            fileReader.read(bytes);
-            fileReader.close();
-            try {
-                api.createMemoryBlock("dmem", api.toAddr(0), bytes,false).setPermissions(true, true, false);
-            } catch (Exception e) {
-                e.printStackTrace();
-                throw new CancelledException();
-            }
-            break;
-        }
-
         boolean isBoot = OptionUtils.getBooleanOptionValue(OPTION_IS_BOOT, options, false);
+        String dmemPath = OptionUtils.getOption(OPTION_DMEM, options, "");
+        int textBase = isBoot ? IMEM_BASE : IMEM_BASE + 0x80;
 
         byte[] imem = provider.readBytes(0, provider.length());
+        if (textBase - IMEM_BASE + imem.length > DMEM_SIZE) {
+            throw new IOException("the microcode does not fit in IMEM (4 KB)");
+        }
+
+        byte[] dmem = new byte[0];
+        if (dmemPath != null && !dmemPath.isBlank()) {
+            File f = new File(dmemPath.trim());
+            if (!f.isFile()) {
+                throw new IOException("DMEM file not found: " + f);
+            }
+            dmem = Files.readAllBytes(f.toPath());
+            if (dmem.length > DMEM_SIZE) {
+                throw new IOException("the DMEM file is larger than DMEM (4 KB)");
+            }
+        }
+
         try {
-            int textBase = isBoot ? 0x1000 : 0x1080;
-            api.createMemoryBlock("imem", api.toAddr(textBase), imem, false).setPermissions(true, false, true);
+            if (dmem.length > 0) {
+                MemoryBlock b = api.createMemoryBlock("dmem", api.toAddr(0), dmem, false);
+                b.setPermissions(true, true, false);
+            }
+            if (dmem.length < DMEM_SIZE) {
+                MemoryBlock b = program.getMemory().createUninitializedBlock("dmem.uninit",
+                    api.toAddr(dmem.length), DMEM_SIZE - dmem.length, false);
+                b.setPermissions(true, true, false);
+            }
+            MemoryBlock code = api.createMemoryBlock("imem", api.toAddr(textBase), imem, false);
+            code.setPermissions(true, false, true);
             api.addEntryPoint(api.toAddr(textBase));
-            program.getMemory().createUninitializedBlock("dmem.uninit", api.toAddr(dmemEnd), 0x1000 - dmemEnd, false).setPermissions(true, true, false);
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new CancelledException();
-        }
-
-        try {
+            api.createLabel(api.toAddr(textBase), isBoot ? "boot_ucode" : "main_ucode", true);
             api.createData(api.toAddr(0xFC0), new OSTask().toDataType());
-        } catch (CodeUnitInsertionException | DuplicateNameException | IOException e) {
-            e.printStackTrace();
-            throw new CancelledException();
+            api.createLabel(api.toAddr(0xFC0), "OSTask", true);
+        } catch (Exception e) {
+            log.appendException(e);
+            throw new IOException("could not create the RSP memory map: " + e.getMessage(), e);
         }
-
     }
 
     @Override
     public List<Option> getDefaultOptions(ByteProvider provider, LoadSpec loadSpec,
-    DomainObject domainObject, boolean isLoadIntoProgram) {
-        List<Option> list =
-        super.getDefaultOptions(provider, loadSpec, domainObject, isLoadIntoProgram);
+            DomainObject domainObject, boolean mirrorFsLayout, boolean isLoadIntoProgram) {
+        List<Option> list = super.getDefaultOptions(provider, loadSpec, domainObject,
+            mirrorFsLayout, isLoadIntoProgram);
 
-        list.add(new Option(OPTION_IS_BOOT, false, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-isBoot"));
+        list.add(new Option(OPTION_IS_BOOT, false, Boolean.class,
+            Loader.COMMAND_LINE_ARG_PREFIX + "-isBoot"));
+        list.add(new Option(OPTION_DMEM, "", String.class,
+            Loader.COMMAND_LINE_ARG_PREFIX + "-dmemFile"));
 
         return list;
     }
 
     @Override
-    public String validateOptions(ByteProvider provider, LoadSpec loadSpec, List<Option> options, Program program) {
-
-        // TODO: If this loader has custom options, validate them here.  Not all options require
-        // validation.
-
+    public String validateOptions(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
+            Program program) {
+        String dmemPath = OptionUtils.getOption(OPTION_DMEM, options, "");
+        if (dmemPath != null && !dmemPath.isBlank() && !new File(dmemPath.trim()).isFile()) {
+            return "DMEM file not found: " + dmemPath;
+        }
         return super.validateOptions(provider, loadSpec, options, program);
     }
 }

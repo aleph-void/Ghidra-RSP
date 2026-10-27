@@ -684,7 +684,8 @@ for mn, fnv, rsq, low, high in (("vrcp", 0x30, False, False, False), ("vrcpl", 0
                                 ("vrsql", 0x35, True, True, False), ("vrsqh", 0x36, True, False, True)):
     c = C()
     div_body(c, rsq, low, high)
-    cons(f'{mn} vd_f^"["^dsel^"]", vte', f"op=18 & bit25=1 & fn={fnv} & vd_f & dsel & vt_f & vsel & vte", c)
+    # the source lane is vsel & 7 whatever vsel is (bit 3 and the broadcast patterns do not matter)
+    cons(f'{mn} vd_f^"["^dsel^"]", vt_f^"["^esel^"]"', f"op=18 & bit25=1 & fn={fnv} & vd_f & dsel & vt_f & esel & vsel & vte", c)
 
 # VMOV: vd[de] = vte[de]
 c = C()

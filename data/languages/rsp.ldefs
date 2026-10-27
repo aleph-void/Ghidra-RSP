@@ -3,17 +3,16 @@
 <!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/language_definitions.rxg -->
 
 <language_definitions>
-<!-- Uncomment the following to make the language available in Ghidra -->
 
   <language processor="NintendoRSP"
           endian="big"
           size="32"
           variant="default"
-          version="1.0"
+          version="2.0"
           slafile="rsp.sla"
           processorspec="rsp.pspec"
           id="RSP:BE:32:default">
-  <description>Nintendo 64 RSP</description>
+  <description>Nintendo 64 RSP (Reality Signal Processor)</description>
   <compiler name="default" spec="rsp.cspec" id="default"/>
 </language>
 

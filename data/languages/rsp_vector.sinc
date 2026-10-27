@@ -4692,7 +4692,7 @@ vte: vt_f^"[7]" is vt_f & vsel=15 {
 :vsar vd_f, vs_f, vte is op=18 & bit25=1 & fn=0x1d & vd_f & vs_f & vte {
 	vd_f = 0;
 }
-:vrcp vd_f^"["^dsel^"]", vte is op=18 & bit25=1 & fn=48 & vd_f & dsel & vt_f & vsel & vte {
+:vrcp vd_f^"["^dsel^"]", vt_f^"["^esel^"]" is op=18 & bit25=1 & fn=48 & vd_f & dsel & vt_f & esel & vsel & vte {
 	local T:16 = vte;
 	local VTR:16 = vt_f;
 	local ln:16 = VTR >> ((7 - (vsel & 7)) * 16);
@@ -4740,7 +4740,7 @@ vte: vt_f^"[7]" is vt_f & vsel=15 {
 	o = o << dsh;
 	vd_f = (vd_f & ~m) | o;
 }
-:vrcpl vd_f^"["^dsel^"]", vte is op=18 & bit25=1 & fn=49 & vd_f & dsel & vt_f & vsel & vte {
+:vrcpl vd_f^"["^dsel^"]", vt_f^"["^esel^"]" is op=18 & bit25=1 & fn=49 & vd_f & dsel & vt_f & esel & vsel & vte {
 	local T:16 = vte;
 	local VTR:16 = vt_f;
 	local ln:16 = VTR >> ((7 - (vsel & 7)) * 16);
@@ -4793,7 +4793,7 @@ vte: vt_f^"[7]" is vt_f & vsel=15 {
 	o = o << dsh;
 	vd_f = (vd_f & ~m) | o;
 }
-:vrcph vd_f^"["^dsel^"]", vte is op=18 & bit25=1 & fn=50 & vd_f & dsel & vt_f & vsel & vte {
+:vrcph vd_f^"["^dsel^"]", vt_f^"["^esel^"]" is op=18 & bit25=1 & fn=50 & vd_f & dsel & vt_f & esel & vsel & vte {
 	local T:16 = vte;
 	local VTR:16 = vt_f;
 	local ln:16 = VTR >> ((7 - (vsel & 7)) * 16);
@@ -4808,7 +4808,7 @@ vte: vt_f^"[7]" is vt_f & vsel=15 {
 	o = o << dsh;
 	vd_f = (vd_f & ~m) | o;
 }
-:vrsq vd_f^"["^dsel^"]", vte is op=18 & bit25=1 & fn=52 & vd_f & dsel & vt_f & vsel & vte {
+:vrsq vd_f^"["^dsel^"]", vt_f^"["^esel^"]" is op=18 & bit25=1 & fn=52 & vd_f & dsel & vt_f & esel & vsel & vte {
 	local T:16 = vte;
 	local VTR:16 = vt_f;
 	local ln:16 = VTR >> ((7 - (vsel & 7)) * 16);
@@ -4861,7 +4861,7 @@ vte: vt_f^"[7]" is vt_f & vsel=15 {
 	o = o << dsh;
 	vd_f = (vd_f & ~m) | o;
 }
-:vrsql vd_f^"["^dsel^"]", vte is op=18 & bit25=1 & fn=53 & vd_f & dsel & vt_f & vsel & vte {
+:vrsql vd_f^"["^dsel^"]", vt_f^"["^esel^"]" is op=18 & bit25=1 & fn=53 & vd_f & dsel & vt_f & esel & vsel & vte {
 	local T:16 = vte;
 	local VTR:16 = vt_f;
 	local ln:16 = VTR >> ((7 - (vsel & 7)) * 16);
@@ -4919,7 +4919,7 @@ vte: vt_f^"[7]" is vt_f & vsel=15 {
 	o = o << dsh;
 	vd_f = (vd_f & ~m) | o;
 }
-:vrsqh vd_f^"["^dsel^"]", vte is op=18 & bit25=1 & fn=54 & vd_f & dsel & vt_f & vsel & vte {
+:vrsqh vd_f^"["^dsel^"]", vt_f^"["^esel^"]" is op=18 & bit25=1 & fn=54 & vd_f & dsel & vt_f & esel & vsel & vte {
 	local T:16 = vte;
 	local VTR:16 = vt_f;
 	local ln:16 = VTR >> ((7 - (vsel & 7)) * 16);
