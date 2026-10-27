@@ -1,0 +1,828 @@
+# RSP emulation cases.  Every expectation was worked out by hand from the instruction semantics (MIPS I
+# subset + RSP vector unit as documented on n64brew and implemented by hardware-tested emulators), not
+# from this module's output.  build_cases.py assembles the "asm" blocks with armips into "code" lines.
+# Data memory is DMEM (0x0000-0x0fff); code runs at 0x1000.  Vector registers are written as 32 hex
+# digits, lane 0 first.
+
+case addiu_negative
+asm
+  addiu r1,zero,-1
+  addiu r2,r1,3
+endasm
+expect r1 0xffffffff
+expect r2 2
+end
+
+case add_addi_sub_never_trap
+asm
+  lui r1,0x7fff
+  ori r1,r1,0xffff
+  addi r2,r1,1
+  add r3,r1,r1
+  sub r4,zero,r1
+endasm
+expect r1 0x7fffffff
+expect r2 0x80000000
+expect r3 0xfffffffe
+expect r4 0x80000001
+end
+
+case sub_subu
+asm
+  sub r3,r1,r2
+  subu r4,r2,r1
+endasm
+set r1 5
+set r2 7
+expect r3 0xfffffffe
+expect r4 2
+end
+
+case logic
+asm
+  and r3,r1,r2
+  or r4,r1,r2
+  xor r5,r1,r2
+  nor r6,r1,r2
+endasm
+set r1 0xf0f0
+set r2 0x0ff0
+expect r3 0x00f0
+expect r4 0xfff0
+expect r5 0xff00
+expect r6 0xffff000f
+end
+
+case compare_signed_unsigned
+asm
+  slt r3,r1,r2
+  sltu r4,r1,r2
+  slti r5,r1,0
+  sltiu r6,r2,2
+  sltiu r7,r1,-1
+  slti r8,r2,-1
+endasm
+set r1 0xffffffff
+set r2 1
+expect r3 1
+expect r4 0
+expect r5 1
+expect r6 1
+expect r7 0
+expect r8 0
+end
+
+case shifts
+asm
+  sll r2,r1,4
+  srl r3,r1,4
+  sra r4,r1,4
+  sllv r6,r1,r5
+  srlv r7,r1,r5
+  srav r8,r1,r5
+  sra r9,r1,31
+  srl r10,r1,31
+  sll r11,r1,31
+endasm
+set r1 0x80000001
+set r5 36
+expect r2 0x00000010
+expect r3 0x08000000
+expect r4 0xf8000000
+expect r6 0x00000010
+expect r7 0x08000000
+expect r8 0xf8000000
+expect r9 0xffffffff
+expect r10 1
+expect r11 0x80000000
+end
+
+case immediates
+asm
+  lui r1,0x1234
+  ori r1,r1,0x5678
+  andi r2,r1,0xff00
+  xori r3,r1,0xffff
+  ori r4,zero,0x8000
+  addiu r5,zero,-0x8000
+endasm
+expect r1 0x12345678
+expect r2 0x5600
+expect r3 0x1234a987
+expect r4 0x8000
+expect r5 0xffff8000
+end
+
+case zero_register_is_constant
+asm
+  addiu zero,zero,5
+  addu r1,zero,zero
+  ori r2,zero,7
+  lui zero,0x1234
+  or r3,zero,r2
+  lw zero,0x40(zero)
+  addu r4,zero,zero
+endasm
+set mem:40 deadbeef
+expect zero 0
+expect r1 0
+expect r2 7
+expect r3 7
+expect r4 0
+end
+
+case loads_extend
+asm
+  lb r1,0x100(zero)
+  lbu r2,0x100(zero)
+  lh r3,0x100(zero)
+  lhu r4,0x100(zero)
+  lw r5,0x100(zero)
+  .word 0x9c060100 ; lwu r6,0x100(zero)
+  lb r7,0x103(zero)
+  lhu r8,0x102(zero)
+endasm
+set mem:100 80818283
+expect r1 0xffffff80
+expect r2 0x80
+expect r3 0xffff8081
+expect r4 0x8081
+expect r5 0x80818283
+expect r6 0x80818283
+expect r7 0xffffff83
+expect r8 0x8283
+end
+
+case stores_and_unaligned
+asm
+  sw r1,0x200(zero)
+  sh r1,0x210(zero)
+  sb r1,0x220(zero)
+  sw r1,0x233(zero)
+endasm
+set r1 0x11223344
+expect mem:200 11223344
+expect mem:210 3344
+expect mem:212 00
+expect mem:220 44
+expect mem:221 00
+expect mem:233 11223344
+expect mem:232 00
+end
+
+case dmem_address_wraps_at_4k
+asm
+  lw r2,0(r1)
+  lw r4,0x110(r3)
+  sw r2,0(r5)
+endasm
+set mem:100 12345678
+set r1 0x1100
+set r3 0xfff0
+set r5 0x1300
+expect r2 0x12345678
+expect r4 0x12345678
+expect mem:300 12345678
+end
+
+case beq_taken_runs_delay_slot
+asm
+  beq r1,r2,tgt
+  addiu r3,zero,1
+  addiu r4,zero,2
+tgt:
+  addiu r5,zero,3
+endasm
+set r1 7
+set r2 7
+expect r3 1
+expect r4 0
+expect r5 3
+end
+
+case beq_not_taken
+asm
+  beq r1,r2,tgt
+  addiu r3,zero,1
+  addiu r4,zero,2
+tgt:
+  addiu r5,zero,3
+endasm
+set r1 7
+set r2 8
+expect r3 1
+expect r4 2
+expect r5 3
+end
+
+case bne_taken
+asm
+  bne r1,r2,tgt
+  nop
+  addiu r4,zero,2
+tgt:
+  addiu r5,zero,3
+endasm
+set r1 7
+set r2 8
+expect r4 0
+expect r5 3
+end
+
+case branches_on_negative
+asm
+  bltz r1,a
+  nop
+  ori r10,zero,1
+a:
+  bgez r1,b
+  nop
+  ori r11,zero,1
+b:
+  blez r1,c
+  nop
+  ori r12,zero,1
+c:
+  bgtz r1,d
+  nop
+  ori r13,zero,1
+d:
+endasm
+set r1 0xfffffffb
+expect r10 0
+expect r11 1
+expect r12 0
+expect r13 1
+end
+
+case branches_on_zero
+asm
+  bltz r1,a
+  nop
+  ori r10,zero,1
+a:
+  bgez r1,b
+  nop
+  ori r11,zero,1
+b:
+  blez r1,c
+  nop
+  ori r12,zero,1
+c:
+  bgtz r1,d
+  nop
+  ori r13,zero,1
+d:
+endasm
+set r1 0
+expect r10 1
+expect r11 0
+expect r12 0
+expect r13 1
+end
+
+case jal_jr_link_is_12_bit_pc
+asm
+  jal sub
+  nop
+  ori r6,zero,6
+  j done
+  nop
+sub:
+  ori r5,zero,5
+  jr ra
+  nop
+done:
+endasm
+expect ra 8
+expect r5 5
+expect r6 6
+end
+
+case jalr_links_and_returns
+asm
+  addiu r2,zero,0x101c
+  jalr r2
+  nop
+  ori r6,zero,6
+  j done
+  nop
+  nop
+  ori r5,zero,5
+  jr ra
+  nop
+done:
+endasm
+expect ra 0xc
+expect r5 5
+expect r6 6
+end
+
+case jalr_other_link_register
+asm
+  addiu r2,zero,0x1010
+  jalr r2,r7
+  nop
+  nop
+  ori r5,zero,5
+endasm
+set ra 0x555
+expect r7 0xc
+expect ra 0x555
+expect r5 5
+end
+
+case bltzal_bgezal_link_even_when_not_taken
+asm
+  bgezal r1,x
+  nop
+  ori r10,zero,1
+x:
+endasm
+set r1 0xffffffff
+expect ra 8
+expect r10 1
+end
+
+case bltzal_taken
+asm
+  bltzal r1,x
+  nop
+  ori r10,zero,1
+x:
+endasm
+set r1 0xffffffff
+expect ra 8
+expect r10 0
+end
+
+case jr_target_folds_into_imem
+asm
+  jr r2
+  nop
+  ori r4,zero,4
+  ori r6,zero,6
+  ori r5,zero,5
+endasm
+set r2 0x2010
+expect r4 0
+expect r6 0
+expect r5 5
+end
+
+case cop0_moves
+asm
+  mtc0 r1,sp_mem_addr
+  mfc0 r2,sp_mem_addr
+  mtc0 r1,dpc_start
+  mfc0 r3,dpc_start
+endasm
+set r1 0x1234
+expect r2 0x1234
+expect SP_MEM_ADDR 0x1234
+expect DPC_START 0x1234
+expect r3 0x1234
+end
+
+case mfc2_mtc2_byte_elements
+asm
+  mfc2 r1,v1[2]
+  mfc2 r2,v1[14]
+  mfc2 r3,v1[15]
+  mfc2 r4,v2[0]
+  mtc2 r5,v3[4]
+  mtc2 r5,v4[15]
+endasm
+set v1 0x0102030405060708090a0b0c0d0e0f10
+set v2 0x80018002000000000000000000000000
+set r5 0xabcd
+expect r1 0x304
+expect r2 0xf10
+expect r3 0x1001
+expect r4 0xffff8001
+expect v3 0x00000000abcd00000000000000000000
+expect v4 0x000000000000000000000000000000ab
+end
+
+case cfc2_ctc2_flag_registers
+asm
+  ctc2 r1,vco
+  cfc2 r2,vco
+  ctc2 r1,vcc
+  cfc2 r3,vcc
+  ctc2 r1,vce
+  cfc2 r4,vce
+endasm
+set r1 0xff01
+expect VCO 0xff01
+expect r2 0xffffff01
+expect VCC 0xff01
+expect r3 0xffffff01
+expect VCE 0x01
+expect r4 1
+end
+
+case vadd_saturates_and_keeps_low_bits
+asm
+  vadd v3,v1,v2
+endasm
+set v1 0x7fff80000005ffff000100001234fffe
+set v2 0x0001ffff000700010001000000010003
+expect v3 0x7fff8000000c00000002000012350001
+expect ACC_L 0x80007fff000c00000002000012350001
+expect VCO 0
+end
+
+case vadd_adds_the_vco_carry_and_clears_vco
+asm
+  vadd v3,v1,v2
+endasm
+set v1 0x7fff80000005ffff000100001234fffe
+set v2 0x0001ffff000700010001000000010003
+set VCO 0xffff0003
+expect v3 0x7fff8000000c00000002000012350001
+expect ACC_L 0x80018000000c00000002000012350001
+expect VCO 0
+end
+
+case vsub
+asm
+  vsub v3,v1,v2
+endasm
+set v1 0x7fff80000005ffff000100001234fffe
+set v2 0x0001ffff000700010001000000010003
+expect v3 0x7ffe8001fffefffe000000001233fffb
+end
+
+case vmulf_rounds_and_saturates
+asm
+  vmulf v3,v1,v2
+endasm
+set v1 0x40008000ffff00017fff0000c0002000
+set v2 0x40008000ffff00017fff55554000ffff
+expect v3 0x20007fff000000007ffe0000e0000000
+expect ACC_H 0x000000000000000000000000ffff0000
+expect ACC_M 0x20008000000000007ffe0000e0000000
+expect ACC_L 0x80008000800280028002800080004000
+end
+
+case vmulu_clamps_negative_to_zero
+asm
+  vmulu v3,v1,v2
+endasm
+set v1 0x40008000ffff00017fff0000c0002000
+set v2 0x40008000ffff00017fff55554000ffff
+expect v3 0x2000ffff000000007ffe000000000000
+end
+
+case vmudh_into_the_upper_accumulator
+asm
+  vmudh v3,v1,v2
+endasm
+set v1 0x0003fffd7fff800000000100ffff1234
+set v2 0x000400040002ffff00050100ffff0000
+expect v3 0x000cfff47fff7fff00007fff00010000
+expect ACC_H 0x0000ffff000000000000000100000000
+expect ACC_M 0x000cfff4fffe80000000000000010000
+expect ACC_L 0
+end
+
+case vmadn_accumulates_unsigned_by_signed
+asm
+  vmadn v3,v1,v2
+endasm
+set v1 0x0003fffd7fff800000000100ffff1234
+set v2 0x000400040002ffff00050100ffff0000
+set ACC_L 0x00100010001000100010001000100010
+expect v3 0x001c0004000e80100010001000110010
+expect ACC_L 0x001c0004000e80100010001000110010
+end
+
+case vabs
+asm
+  vabs v3,v1,v2
+endasm
+set v1 0x0005fffb0000800080007ffffff00001
+set v2 0x000300030003800000018000fff00000
+expect v3 0x0003fffd00007fffffff800000100000
+end
+
+case vector_logic
+asm
+  vand v3,v1,v2
+  vor v4,v1,v2
+  vxor v5,v1,v2
+  vnor v6,v1,v2
+  vnand v7,v1,v2
+  vnxor v8,v1,v2
+endasm
+set v1 0xf0f0ff0000ffaaaa55550000ffff1234
+set v2 0x0ff00ff00ff0ff000ff0ffffffff00ff
+expect v3 0x00f00f0000f0aa0005500000ffff0034
+expect v4 0xfff0fff00fffffaa5ff5ffffffff12ff
+expect v5 0xff00f0f00f0f55aa5aa5ffff000012cb
+expect v6 0x000f000ff0000055a00a00000000ed00
+expect v7 0xff0ff0ffff0f55fffaafffff0000ffcb
+expect v8 0x00ff0f0ff0f0aa55a55a0000ffffed34
+end
+
+case vmrg_selects_by_vcc_and_clears_vco
+asm
+  vmrg v3,v1,v2
+endasm
+set v1 0x11112222333344445555666677778888
+set v2 0xaaaabbbbccccddddeeeeffff00010002
+set VCC 0x0095
+set VCO 0xffff
+expect v3 0x1111bbbb3333dddd5555ffff00018888
+expect VCO 0
+expect VCC 0x0095
+end
+
+case vlt
+asm
+  vlt v3,v1,v2
+endasm
+set v1 0x0001ffff8000000500057fff0000fffe
+set v2 0x0002000100000005000480000000fffd
+expect v3 0x0001ffff80000005000480000000fffd
+expect VCC 0x0007
+expect VCO 0
+end
+
+case veq
+asm
+  veq v3,v1,v2
+endasm
+set v1 0x0001ffff8000000500057fff0000fffe
+set v2 0x0002000100000005000480000000fffd
+expect v3 0x0002000100000005000480000000fffd
+expect VCC 0x0048
+end
+
+case vne
+asm
+  vne v3,v1,v2
+endasm
+set v1 0x0001ffff8000000500057fff0000fffe
+set v2 0x0002000100000005000480000000fffd
+expect v3 0x0001ffff8000000500057fff0000fffe
+expect VCC 0x00b7
+end
+
+case vge
+asm
+  vge v3,v1,v2
+endasm
+set v1 0x0001ffff8000000500057fff0000fffe
+set v2 0x0002000100000005000480000000fffd
+expect v3 0x000200010000000500057fff0000fffe
+expect VCC 0x00f8
+end
+
+case vaddc_sets_carry
+asm
+  vaddc v3,v1,v2
+endasm
+set v1 0xffff000180000000ffff123400007fff
+set v2 0x0001ffff800000000000123400007fff
+expect v3 0x0000000000000000ffff24680000fffe
+expect VCO 0x0007
+end
+
+case vsubc_sets_borrow_and_not_equal
+asm
+  vsubc v3,v1,v2
+endasm
+set v1 0x0005000300030000ffff800000010000
+set v2 0x0003000500030001ffff7fff00000000
+expect v3 0x0002fffe0000ffff0000000100010000
+expect VCO 0x6b0a
+end
+
+case broadcast_quarter_and_half_and_scalar
+asm
+  vadd v3,v1,v2[0q]
+  vadd v4,v1,v2[1h]
+  vadd v5,v1,v2[3]
+  vadd v6,v1,v2[0h]
+  vadd v7,v1,v2[1q]
+endasm
+set v1 0x00010002000300040005000600070008
+set v2 0x00100020003000400050006000700080
+expect v3 0x00110012003300340055005600770078
+expect v4 0x00210022002300240065006600670068
+expect v5 0x00410042004300440045004600470048
+expect v6 0x00110012001300140055005600570058
+expect v7 0x00210022004300440065006600870088
+end
+
+case vrcp_table_values
+asm
+  vrcp v4[0],v1[0]
+  vrcp v5[0],v1[1]
+  vrcp v6[0],v1[2]
+endasm
+set v1 0x00010002010000000000000000000000
+expect v4 0xc0000000000000000000000000000000
+expect v5 0xe0000000000000000000000000000000
+expect v6 0xffc00000000000000000000000000000
+expect DIVOUT 0x007f
+expect DIVDP 0
+end
+
+case vrcp_of_three_uses_the_table
+asm
+  vrcp v4[1],v1[4]
+endasm
+set v1 0x00000000000000000003000000000000
+expect v4 0x0000a000000000000000000000000000
+expect DIVOUT 0x2aaa
+expect ACC_L 0x00030003000300030003000300030003
+end
+
+case vrcp_negative_and_zero
+asm
+  vrcp v7[7],v1[3]
+  vrcp v8[2],v1[0]
+endasm
+set v1 0x000000000000ffff0000000000000000
+expect v7 0x00000000000000000000000000003fff
+expect v8 0x00000000ffff00000000000000000000
+expect DIVOUT 0x7fff
+end
+
+case vmov_and_vsar
+asm
+  vsar v4,v5,v6[0]
+  vsar v7,v5,v6[1]
+  vsar v8,v5,v6[2]
+  vmov v3[2],v1[5]
+endasm
+set v1 0x00100020003000400050006000700080
+set ACC_H 0x11112222333344445555666677778888
+set ACC_M 0xaaaabbbbccccddddeeeeffff00010002
+set ACC_L 0x0123045607890abc0def0fed0cba0987
+expect v3 0x00000000006000000000000000000000
+expect ACC_L 0x00600060006000600060006000600060
+expect v4 0x11112222333344445555666677778888
+expect v7 0xaaaabbbbccccddddeeeeffff00010002
+expect v8 0x0123045607890abc0def0fed0cba0987
+end
+
+case lqv_aligned
+asm
+  lqv v1[0],0(r1)
+endasm
+set mem:100 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
+set r1 0x100
+expect v1 0x000102030405060708090a0b0c0d0e0f
+end
+
+case lqv_unaligned_stops_at_the_16_byte_boundary
+asm
+  lqv v2[0],0(r2)
+endasm
+set mem:100 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
+set r2 0x104
+set v2 0xffffffffffffffffffffffffffffffff
+expect v2 0x0405060708090a0b0c0d0e0fffffffff
+end
+
+case lqv_with_element
+asm
+  lqv v3[3],0(r1)
+endasm
+set mem:100 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
+set r1 0x100
+set v3 0xffffffffffffffffffffffffffffffff
+expect v3 0xffffff000102030405060708090a0b0c
+end
+
+case lrv
+asm
+  lrv v4[0],0(r2)
+endasm
+set mem:100 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
+set r2 0x108
+set v4 0xffffffffffffffffffffffffffffffff
+expect v4 0xffffffffffffffff0001020304050607
+end
+
+case sqv_aligned
+asm
+  sqv v5[0],0(r3)
+endasm
+set v5 0x00112233445566778899aabbccddeeff
+set r3 0x200
+expect mem:200 00112233445566778899aabbccddeeff
+end
+
+case sqv_unaligned
+asm
+  sqv v5[0],0(r4)
+endasm
+set v5 0x00112233445566778899aabbccddeeff
+set r4 0x20c
+expect mem:20c 00112233
+expect mem:200 00000000
+expect mem:210 00000000
+end
+
+case srv
+asm
+  srv v5[0],0(r6)
+endasm
+set v5 0x00112233445566778899aabbccddeeff
+set r6 0x234
+expect mem:230 ccddeeff
+expect mem:234 00000000
+end
+
+case ldv_sdv
+asm
+  ldv v6[0],0(r1)
+  sdv v5[8],0(r7)
+endasm
+set mem:100 000102030405060708090a0b0c0d0e0f
+set r1 0x100
+set r7 0x300
+set v5 0x00112233445566778899aabbccddeeff
+set v6 0xffffffffffffffffffffffffffffffff
+expect v6 0x0001020304050607ffffffffffffffff
+expect mem:300 8899aabbccddeeff
+end
+
+case lbv_sbv_lsv_ssv_llv_slv
+asm
+  lbv v8[5],3(r1)
+  sbv v5[15],5(r3)
+  lsv v9[2],0(r1)
+  ssv v5[14],0(r3)
+  llv v10[4],0(r1)
+  slv v5[12],8(r3)
+endasm
+set mem:100 000102030405060708090a0b0c0d0e0f
+set r1 0x100
+set r3 0x200
+set v5 0x00112233445566778899aabbccddeeff
+set v9 0xffffffffffffffffffffffffffffffff
+set v10 0xffffffffffffffffffffffffffffffff
+expect v8 0x00000000000300000000000000000000
+expect mem:205 ff
+expect mem:204 00
+expect v9 0xffff0001ffffffffffffffffffffffff
+expect mem:200 eeff
+expect v10 0xffffffff00010203ffffffffffffffff
+expect mem:208 ccddeeff
+end
+
+case lpv_luv_lhv_lfv
+asm
+  lpv v11[0],0(r1)
+  luv v12[0],0(r1)
+  lhv v13[0],0(r1)
+  lfv v14[0],0(r1)
+endasm
+set mem:100 000102030405060708090a0b0c0d0e0f
+set r1 0x100
+expect v11 0x00000100020003000400050006000700
+expect v12 0x00000080010001800200028003000380
+expect v13 0x00000100020003000400050006000700
+expect v14 0x00000200040006000000000000000000
+end
+
+case ltv_transposes_into_eight_registers
+asm
+  ltv v8[0],0(r1)
+endasm
+set mem:100 000102030405060708090a0b0c0d0e0f
+set r1 0x100
+expect v8 0x00010000000000000000000000000000
+expect v9 0x00000203000000000000000000000000
+expect v10 0x00000000040500000000000000000000
+expect v15 0x00000000000000000000000000000e0f
+end
+
+case stv_stores_the_diagonal
+asm
+  stv v8[0],0(r3)
+endasm
+set r3 0x200
+set v8 0x000102030405060708090a0b0c0d0e0f
+set v9 0x101112131415161718191a1b1c1d1e1f
+set v10 0x202122232425262728292a2b2c2d2e2f
+set v11 0x303132333435363738393a3b3c3d3e3f
+set v12 0x404142434445464748494a4b4c4d4e4f
+set v13 0x505152535455565758595a5b5c5d5e5f
+set v14 0x606162636465666768696a6b6c6d6e6f
+set v15 0x707172737475767778797a7b7c7d7e7f
+expect mem:200 000112132425363748495a5b6c6d7e7f
+end
+
+case deliberately_wrong_expectation broken
+asm
+  addiu r1,zero,1
+endasm
+expect r1 2
+end
