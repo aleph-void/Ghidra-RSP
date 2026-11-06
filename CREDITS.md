@@ -37,6 +37,9 @@ Each item is a commit on branch `ghidra-rare`.
 - **Extension build.** `build.gradle` (plain extension build, test/generator folders excluded from the zip),
   `extension.properties`.
 - **Tests and documents.** `test/` (see `GHIDRA-RARE.md`), `gen/`, `GHIDRA-RARE.md`, this file, README updates.
+- **Loader ranking.** The RSP loader ranks after Ghidra's Raw Binary loader. The file has no signature, so the loader
+  accepts almost any file of the right size; ranked first, it was used for unrelated files and for every headless
+  `-processor` import of another language. It is still offered: pick it by name (`-loader GhidraRSPLoader` headless).
 
 ## Sources used for the work
 
